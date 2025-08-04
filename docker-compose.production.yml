@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  sauti-media-production:
+    image: sauti-media-baas:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # AWS Secrets Manager (Recommended for production)
+      - USE_AWS_SECRETS_MANAGER=${USE_AWS_SECRETS_MANAGER:-false}
+      - AWS_SECRET_NAME=${AWS_SECRET_NAME:-sauti-media-baas/production}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      # AWS Credentials (if not using IAM role)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      # Fallback: Direct environment variables (less secure)
+      - MUX_TOKEN_ID=${MUX_TOKEN_ID}
+      - MUX_TOKEN_SECRET=${MUX_TOKEN_SECRET}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - API_KEY_SALT=${API_KEY_SALT}
+      # Optional Configuration
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://yourdomain.com}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - sauti-media
+
+networks:
+  sauti-media:
+    driver: bridge

@@ -1,0 +1,22 @@
+FROM sauti-media-baas-base:latest
+
+# Set working directory
+WORKDIR /app
+
+# Set environment variables specific to API Gateway
+ENV SERVICE_NAME=api-gateway \
+    LOG_FORMAT=json
+
+# Create directory for API Gateway specific logs
+RUN mkdir -p /app/logs/api-gateway && \
+    chown -R nodejs:nodejs /app/logs/api-gateway
+
+# Switch to non-root user
+USER nodejs
+
+# Update health check for API Gateway specific endpoint
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health/readiness || exit 1
+
+# Command to run the API Gateway service
+CMD ["node", "--expose-gc", "src/index.js"]
