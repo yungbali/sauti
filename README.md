@@ -11,6 +11,8 @@ A simplified, production-ready media backend specifically designed for African m
 - 📱 **Mobile-First Streaming** - Optimized for cellular networks
 - 💰 **Ad Insertion** - Pre-roll, mid-roll, post-roll monetization
 - ⚡ **Ultra-Low Bandwidth** - Streams on 150kbps connections
+- 🔄 **Real-Time Updates** - WebSocket support for live stats
+- 🤖 **Automated Maintenance** - Self-managing system with cron jobs
 
 ## 🚀 Quick Start
 

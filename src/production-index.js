@@ -18,9 +18,18 @@ const { getClient: getSupabaseClient, isConfigured: isSupabaseConfigured } = req
 const ingestService = require('./services/production/ingest.service');
 const streamingService = require('./services/production/streaming.service');
 const adService = require('./services/production/ad.service');
+const schedulerService = require('./services/production/scheduler.service');
+const webSocketService = require('./services/production/websocket.service');
+
+// Import routes
+const adminRoutes = require('./api-gateway/routes/production-admin.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const server = require('http').createServer(app);
+
+// Initialize services
+schedulerService.init();
 
 // Security middleware
 app.use(helmet({
@@ -31,7 +40,7 @@ app.use(helmet({
             scriptSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
             imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'", "https://api.mux.com"]
+            connectSrc: ["'self'", "https://api.mux.com", "ws:", "wss:"]
         }
     }
 }));
@@ -41,21 +50,21 @@ app.use(cors({
     origin: function (origin, callback) {
         // Allow requests with no origin (mobile apps, etc.)
         if (!origin) return callback(null, true);
-        
+
         // Allow all origins in development
         if (process.env.NODE_ENV === 'development') {
             return callback(null, true);
         }
-        
+
         // In production, you should specify allowed origins
-        const allowedOrigins = process.env.ALLOWED_ORIGINS ? 
-            process.env.ALLOWED_ORIGINS.split(',') : 
+        const allowedOrigins = process.env.ALLOWED_ORIGINS ?
+            process.env.ALLOWED_ORIGINS.split(',') :
             ['https://yourdomain.com'];
-            
+
         if (allowedOrigins.includes(origin)) {
             return callback(null, true);
         }
-        
+
         callback(new Error('Not allowed by CORS'));
     },
     credentials: true
@@ -85,6 +94,9 @@ app.use((req, res, next) => {
     next();
 });
 
+// Mount Admin Routes
+app.use('/v1/admin', adminRoutes);
+
 // Health check endpoint  
 app.get('/health', async (req, res) => {
     const health = {
@@ -97,7 +109,9 @@ app.get('/health', async (req, res) => {
             supabase: await isSupabaseConfigured() ? 'operational' : 'configuration-needed',
             ingest: 'operational',
             streaming: 'operational',
-            ads: 'operational'
+            ads: 'operational',
+            scheduler: 'operational',
+            websocket: webSocketService.getConnectionCount() + ' connections'
         },
         memory: {
             used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
@@ -107,7 +121,7 @@ app.get('/health', async (req, res) => {
         environment: process.env.NODE_ENV || 'development',
         awsSecretsManager: process.env.USE_AWS_SECRETS_MANAGER === 'true' || !!process.env.AWS_SECRET_NAME
     };
-    
+
     res.json(health);
 });
 
@@ -119,11 +133,13 @@ app.get('/', async (req, res) => {
         description: 'African-optimized media distribution backend with real Mux + Supabase integration',
         features: [
             'Real Mux integration for video processing',
-            'Supabase database for data persistence', 
+            'Supabase database for data persistence',
             'African ISP-optimized streaming',
             'Production-ready ad insertion',
             'Mobile-first delivery optimizations',
-            'AWS Secrets Manager integration'
+            'AWS Secrets Manager integration',
+            'Real-time updates via WebSocket',
+            'Automated maintenance tasks'
         ],
         endpoints: {
             ingest: '/v1/ingest',
@@ -201,7 +217,7 @@ app.post('/v1/ingest/upload', validateUpload, handleValidationErrors, async (req
         res.json(result);
     } catch (error) {
         logger.error('Upload creation failed:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to create upload URL',
             message: error.message,
             configured: await isMuxConfigured()
@@ -212,10 +228,16 @@ app.post('/v1/ingest/upload', validateUpload, handleValidationErrors, async (req
 app.post('/v1/ingest/import', validateImport, handleValidationErrors, async (req, res) => {
     try {
         const result = await ingestService.importFromUrl(req.body);
+
+        // Broadcast update via WebSocket
+        if (result.id) {
+            webSocketService.broadcastJobUpdate(result.id, 'created', { type: 'import' });
+        }
+
         res.json(result);
     } catch (error) {
         logger.error('Import failed:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to import media',
             message: error.message,
             configured: await isMuxConfigured()
@@ -229,7 +251,7 @@ app.get('/v1/ingest/jobs/:jobId', async (req, res) => {
         res.json(result);
     } catch (error) {
         logger.error('Job status failed:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to get job status',
             message: error.message,
             configured: await isMuxConfigured()
@@ -247,19 +269,24 @@ app.get('/v1/streaming/:assetId', async (req, res) => {
             isp: req.query.isp,
             ip: req.ip
         };
-        
-        logger.info('Getting streaming URLs (Production)', { 
-            assetId: req.params.assetId, 
-            options 
+
+        logger.info('Getting streaming URLs (Production)', {
+            assetId: req.params.assetId,
+            options
         });
-        
+
         const result = await streamingService.getOptimizedStreamingUrls(req.params.assetId, options);
+
+        // Broadcast viewer count update (simulated increment)
+        // In a real app, we'd track active sessions more accurately
+        webSocketService.broadcastViewerCount(req.params.assetId, Math.floor(Math.random() * 10) + 1);
+
         res.json(result);
     } catch (error) {
         logger.error('Streaming URLs failed:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to get streaming URLs',
-            message: error.message 
+            message: error.message
         });
     }
 });
@@ -271,9 +298,9 @@ app.get('/v1/streaming/:assetId/analytics', async (req, res) => {
         res.json(result);
     } catch (error) {
         logger.error('Streaming analytics failed:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to get streaming analytics',
-            message: error.message 
+            message: error.message
         });
     }
 });
@@ -281,22 +308,22 @@ app.get('/v1/streaming/:assetId/analytics', async (req, res) => {
 // AD ROUTES
 app.post('/v1/ads/cuepoints/:assetId', validateCuePoint, handleValidationErrors, async (req, res) => {
     try {
-        logger.info('Creating ad cue point (Production)', { 
-            assetId: req.params.assetId, 
-            cuePointData: req.body 
+        logger.info('Creating ad cue point (Production)', {
+            assetId: req.params.assetId,
+            cuePointData: req.body
         });
-        
+
         const result = await adService.createAdCuePoint(req.params.assetId, req.body);
-        
-        logger.info('Ad cue point created', { 
+
+        logger.info('Ad cue point created', {
             cuePointId: result.id,
-            assetId: req.params.assetId 
+            assetId: req.params.assetId
         });
-        
+
         res.json(result);
     } catch (error) {
         logger.error('Cue point creation failed:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to create cue point',
             message: error.message,
             configured: await isSupabaseConfigured()
@@ -310,7 +337,7 @@ app.get('/v1/ads/cuepoints/:assetId', async (req, res) => {
         res.json(result);
     } catch (error) {
         logger.error('Get cue points failed:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to get cue points',
             message: error.message,
             configured: await isSupabaseConfigured()
@@ -326,20 +353,20 @@ app.get('/v1/ads/:assetId/vast/:cuePointId', async (req, res) => {
             language: req.query.language,
             userAgent: req.get('user-agent')
         };
-        
+
         const result = await adService.generateVASTResponse(
-            req.params.assetId, 
-            req.params.cuePointId, 
+            req.params.assetId,
+            req.params.cuePointId,
             options
         );
-        
+
         res.set('Content-Type', 'application/xml');
         res.send(result.vastXml);
     } catch (error) {
         logger.error('VAST generation failed:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to generate VAST response',
-            message: error.message 
+            message: error.message
         });
     }
 });
@@ -351,9 +378,9 @@ app.get('/v1/ads/:assetId/analytics', async (req, res) => {
         res.json(result);
     } catch (error) {
         logger.error('Ad analytics failed:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to get ad analytics',
-            message: error.message 
+            message: error.message
         });
     }
 });
@@ -392,17 +419,23 @@ app.use('*', (req, res) => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
     logger.info('SIGTERM received, shutting down gracefully');
+    schedulerService.stop();
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
     logger.info('SIGINT received, shutting down gracefully');
+    schedulerService.stop();
     process.exit(0);
 });
 
 // Start server
-app.listen(PORT, async () => {
+server.listen(PORT, async () => {
     logger.info('🚀 Starting Sauti Media BaaS Production...');
+
+    // Initialize WebSocket
+    webSocketService.init(server);
+
     logger.info('📋 Production Configuration:');
     logger.info(`   🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     logger.info(`   🔐 AWS Secrets Manager: ${process.env.USE_AWS_SECRETS_MANAGER === 'true' || process.env.AWS_SECRET_NAME ? 'Enabled' : 'Disabled'}`);
@@ -421,4 +454,5 @@ app.listen(PORT, async () => {
     logger.info('   💰 Supabase-powered ad insertion');
     logger.info('   📱 Production mobile-first delivery');
     logger.info('   ☁️ AWS Secrets Manager integration');
+    logger.info('   ⚡ Real-time updates & Automated maintenance enabled');
 });
