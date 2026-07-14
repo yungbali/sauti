@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sauti Media Pipeline Test Harness</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Arial, sans-serif;
+        background: #121212;
+        color: #fff;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        background: radial-gradient(
+          circle at top,
+          #233b32 0,
+          #121212 40%,
+          #070707 100%
+        );
+      }
+
+      main {
+        width: min(960px, calc(100% - 32px));
+        padding: 32px 0 48px;
+        text-align: center;
+      }
+
+      video {
+        width: 100%;
+        max-width: 720px;
+        border: 2px solid #2d6b4f;
+        border-radius: 12px;
+        margin-top: 20px;
+        background: #000;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+      }
+
+      .meta,
+      .panel {
+        margin: 16px auto 0;
+        max-width: 720px;
+        color: #cfd8d3;
+      }
+
+      .panel {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        text-align: left;
+      }
+
+      .card {
+        padding: 14px;
+        border: 1px solid #254638;
+        border-radius: 10px;
+        background: rgba(18, 30, 25, 0.82);
+      }
+
+      label {
+        display: block;
+        margin-bottom: 6px;
+        color: #89d8b1;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      input,
+      select,
+      button {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 8px;
+        border: 1px solid #355f4c;
+        padding: 10px;
+        background: #0d1512;
+        color: #fff;
+      }
+
+      button {
+        cursor: pointer;
+        border: 0;
+        background: #23a76f;
+        font-weight: 700;
+      }
+
+      code {
+        overflow-wrap: anywhere;
+        color: #89d8b1;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Sauti Local Network Stress Tester</h1>
+      <p>
+        Simulating Nigerian mobile playback with an ultra-low-bandwidth 150kbps
+        profile.
+      </p>
+
+      <section class="panel" aria-label="Playback profile controls">
+        <div class="card">
+          <label for="asset-id">Asset ID</label>
+          <input id="asset-id" value="test-asset" />
+        </div>
+        <div class="card">
+          <label for="country">Country</label>
+          <select id="country">
+            <option value="NG" selected>Nigeria</option>
+            <option value="KE">Kenya</option>
+            <option value="ZA">South Africa</option>
+            <option value="GH">Ghana</option>
+          </select>
+        </div>
+        <div class="card">
+          <label for="isp">ISP</label>
+          <select id="isp">
+            <option value="mtn" selected>MTN</option>
+            <option value="airtel">Airtel</option>
+            <option value="glo">Glo</option>
+            <option value="9mobile">9mobile</option>
+            <option value="auto">Auto</option>
+          </select>
+        </div>
+        <div class="card">
+          <label for="connection-type">Connection</label>
+          <select id="connection-type">
+            <option value="cellular" selected>Cellular</option>
+            <option value="slow">Slow</option>
+            <option value="wifi">Wi-Fi</option>
+            <option value="wired">Wired</option>
+          </select>
+        </div>
+        <div class="card">
+          <label for="ads">Manifest mode</label>
+          <select id="ads">
+            <option value="true" selected>Ad-enabled</option>
+            <option value="false">Optimization only</option>
+          </select>
+        </div>
+        <div class="card">
+          <label>&nbsp;</label>
+          <button id="load-stream">Load optimized stream</button>
+        </div>
+      </section>
+
+      <video id="sauti-player" controls playsinline></video>
+      <div class="meta" id="player-log">
+        Choose a profile and load the stream.
+      </div>
+      <div class="meta">
+        Manifest: <code id="manifest-url">Not loaded yet</code>
+      </div>
+    </main>
+
+    <script>
+      const video = document.getElementById("sauti-player");
+      const logDiv = document.getElementById("player-log");
+      const manifestUrl = document.getElementById("manifest-url");
+      const loadButton = document.getElementById("load-stream");
+      let hls;
+
+      function buildManifestUrl() {
+        const assetId = encodeURIComponent(
+          document.getElementById("asset-id").value.trim() || "test-asset",
+        );
+        const params = new URLSearchParams({
+          country: document.getElementById("country").value,
+          deviceType: "mobile",
+          connectionType: document.getElementById("connection-type").value,
+          ads: document.getElementById("ads").value,
+        });
+        const isp = document.getElementById("isp").value;
+
+        if (isp && isp !== "auto") {
+          params.set("isp", isp);
+        }
+
+        return `${window.location.origin}/v1/streaming/${assetId}/manifest?${params.toString()}`;
+      }
+
+      function loadStream() {
+        const targetManifest = buildManifestUrl();
+        manifestUrl.innerText = targetManifest;
+        logDiv.innerText = "Initializing optimized stream...";
+
+        if (hls) {
+          hls.destroy();
+          hls = null;
+        }
+
+        if (window.Hls && Hls.isSupported()) {
+          hls = new Hls({
+            maxBufferLength: 4,
+            maxMaxBufferLength: 10,
+            lowLatencyMode: true,
+          });
+
+          hls.loadSource(targetManifest);
+          hls.attachMedia(video);
+
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            logDiv.innerText =
+              "Manifest loaded. Sauti Nigerian mobile optimizations applied.";
+          });
+
+          hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+            logDiv.innerText = `Sauti backend/player quality profile switched to level index: ${data.level}`;
+          });
+
+          hls.on(Hls.Events.ERROR, (event, data) => {
+            logDiv.innerText = `Playback event: ${data.type} / ${data.details}`;
+          });
+        } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          video.src = targetManifest;
+          logDiv.innerText = "Native HLS playback initialized.";
+        } else {
+          logDiv.innerText = "HLS is not supported in this browser.";
+        }
+      }
+
+      loadButton.addEventListener("click", loadStream);
+      loadStream();
+    </script>
+  </body>
+</html>

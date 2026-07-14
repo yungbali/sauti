@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/production-index.js",
+    "start:mvp": "node src/mvp-index.js",
+    "dev:mvp": "nodemon src/mvp-index.js",
     "start:gc": "node --expose-gc src/production-index.js",
     "dev": "nodemon src/production-index.js",
     "dev:gc": "nodemon --expose-gc src/production-index.js",

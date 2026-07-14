@@ -4,126 +4,163 @@
  */
 
 // Set environment before loading anything else
-process.env.NODE_ENV = process.env.NODE_ENV || 'development';
-process.env.USE_AWS_SECRETS_MANAGER = process.env.USE_AWS_SECRETS_MANAGER || 'false';
+process.env.NODE_ENV = process.env.NODE_ENV || "development";
+process.env.USE_AWS_SECRETS_MANAGER =
+  process.env.USE_AWS_SECRETS_MANAGER || "false";
 
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const { logger } = require('./common/logger');
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const path = require("path");
+const rateLimit = require("express-rate-limit");
+const { logger } = require("./common/logger");
 
 // Core MVP services only
-const { setupMvpIngestRoutes } = require('./api-gateway/routes/mvp-ingest.routes');
-const { setupMvpStreamingRoutes } = require('./api-gateway/routes/mvp-streaming.routes');
-const { setupMvpAdRoutes } = require('./api-gateway/routes/mvp-ad.routes');
-const { setupMvpHealthRoutes } = require('./api-gateway/routes/mvp-health.routes');
+const {
+  setupMvpIngestRoutes,
+} = require("./api-gateway/routes/mvp-ingest.routes");
+const {
+  setupMvpStreamingRoutes,
+} = require("./api-gateway/routes/mvp-streaming.routes");
+const { setupMvpAdRoutes } = require("./api-gateway/routes/mvp-ad.routes");
+const {
+  setupMvpHealthRoutes,
+} = require("./api-gateway/routes/mvp-health.routes");
 
 /**
  * Create and configure Express app for MVP
  */
 function createMvpApp() {
   const app = express();
-  
+
   // Basic security and middleware
-  app.use(helmet());
-  app.use(cors({
-    origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : ['*']
-  }));
-  
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+          "script-src": ["'self'", "https://cdn.jsdelivr.net"],
+          "media-src": ["'self'", "https://stream.mux.com", "blob:", "data:"],
+          "connect-src": ["'self'", "https://stream.mux.com"],
+        },
+      },
+    }),
+  );
+  app.use(
+    cors({
+      origin: process.env.CORS_ORIGINS
+        ? process.env.CORS_ORIGINS.split(",")
+        : ["*"],
+    }),
+  );
+
   // Rate limiting
   const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: process.env.RATE_LIMIT_MAX || 1000, // Generous for development
-    message: 'Too many requests from this IP'
+    message: "Too many requests from this IP",
   });
   app.use(limiter);
-  
+
   // Body parsing
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true }));
-  
+
   // Request logging
   app.use((req, res, next) => {
     logger.info(`${req.method} ${req.path}`, {
       ip: req.ip,
-      userAgent: req.get('User-Agent')
+      userAgent: req.get("User-Agent"),
     });
     next();
   });
-  
+
+  // Static browser test harness for local partner demos
+  app.use("/demo", express.static(path.join(__dirname, "..", "public")));
+
   // MVP API Routes - Core features only
-  const apiPrefix = process.env.API_PREFIX || '/v1';
-  
+  const apiPrefix = process.env.API_PREFIX || "/v1";
+
   // Core media features
   app.use(`${apiPrefix}/ingest`, setupMvpIngestRoutes());
   app.use(`${apiPrefix}/streaming`, setupMvpStreamingRoutes());
   app.use(`${apiPrefix}/ads`, setupMvpAdRoutes());
-  
+
   // Health and status
-  app.use('/health', setupMvpHealthRoutes());
-  
+  app.use("/health", setupMvpHealthRoutes());
+
   // Root endpoint
-  app.get('/', (req, res) => {
+  app.get("/", (req, res) => {
     res.json({
-      name: 'Sauti Media BaaS MVP',
-      version: '1.0.0',
-      description: 'African-optimized media distribution backend',
+      name: "Sauti Media BaaS MVP",
+      version: "1.0.0",
+      description: "African-optimized media distribution backend",
       features: [
-        'Media Ingestion via Mux',
-        'African ISP-optimized streaming',
-        'Ad insertion and monetization',
-        'Mobile-first delivery'
+        "Media Ingestion via Mux",
+        "African ISP-optimized streaming",
+        "Ad insertion and monetization",
+        "Mobile-first delivery",
       ],
       endpoints: {
         ingest: `${apiPrefix}/ingest`,
         streaming: `${apiPrefix}/streaming`,
         ads: `${apiPrefix}/ads`,
-        health: '/health'
-      }
+        demo: "/demo/sauti-test-harness.html",
+        health: "/health",
+      },
     });
   });
-  
+
   // Simple API docs endpoint
   app.get(`${apiPrefix}/docs`, (req, res) => {
     res.json({
-      title: 'Sauti Media BaaS API',
-      description: 'Simplified API for African media distribution',
+      title: "Sauti Media BaaS API",
+      description: "Simplified API for African media distribution",
       endpoints: {
-        'POST /v1/ingest/upload': 'Create direct upload URL',
-        'POST /v1/ingest/import': 'Import media from URL',
-        'GET /v1/ingest/jobs/:jobId': 'Get ingest job status',
-        'GET /v1/streaming/:assetId': 'Get optimized streaming URLs',
-        'POST /v1/ads/cuepoints/:assetId': 'Create ad cue points',
-        'GET /v1/ads/cuepoints/:assetId': 'Get ad cue points',
-        'GET /health': 'Health check endpoint'
-      }
+        "POST /v1/ingest/upload": "Create direct upload URL",
+        "POST /v1/ingest/import": "Import media from URL",
+        "GET /v1/ingest/jobs/:jobId": "Get ingest job status",
+        "GET /v1/streaming/:assetId": "Get optimized streaming URLs",
+        "GET /v1/streaming/:assetId/manifest":
+          "Get HLS manifest with optional ads",
+        "GET /v1/streaming/:assetId/qualities":
+          "Get connection-aware quality options",
+        "GET /demo/sauti-test-harness.html":
+          "Open the browser playback test harness",
+        "POST /v1/ads/cuepoints/:assetId": "Create ad cue points",
+        "GET /v1/ads/cuepoints/:assetId": "Get ad cue points",
+        "GET /v1/ads/:assetId/decision": "Get server-guided ad decision",
+        "POST /v1/ads/:assetId/events": "Record ad delivery telemetry",
+        "GET /v1/ads/:assetId/manifest": "Get server-guided ad manifest",
+        "GET /health": "Health check endpoint",
+      },
     });
   });
-  
+
   // 404 handler
   app.use((req, res) => {
     res.status(404).json({
-      error: 'Endpoint not found',
+      error: "Endpoint not found",
       message: `${req.method} ${req.path} is not available`,
       availableEndpoints: [
         `${apiPrefix}/ingest`,
-        `${apiPrefix}/streaming`, 
+        `${apiPrefix}/streaming`,
         `${apiPrefix}/ads`,
-        '/health'
-      ]
+        "/demo/sauti-test-harness.html",
+        "/health",
+      ],
     });
   });
-  
+
   // Error handler
   app.use((error, req, res, next) => {
-    logger.error('API Error:', error);
+    logger.error("API Error:", error);
     res.status(error.status || 500).json({
-      error: error.message || 'Internal server error',
-      ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
+      error: error.message || "Internal server error",
+      ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
     });
   });
-  
+
   return app;
 }
 
@@ -132,48 +169,50 @@ function createMvpApp() {
  */
 async function startMvpServer() {
   try {
-    logger.info('🚀 Starting Sauti Media BaaS MVP...');
-    
+    logger.info("🚀 Starting Sauti Media BaaS MVP...");
+
     // Create storage directory
-    const fs = require('fs');
-    if (!fs.existsSync('./storage')) {
-      fs.mkdirSync('./storage', { recursive: true });
+    const fs = require("fs");
+    if (!fs.existsSync("./storage")) {
+      fs.mkdirSync("./storage", { recursive: true });
     }
-    
+
     const app = createMvpApp();
     const PORT = process.env.PORT || 3000;
-    
+
     const server = app.listen(PORT, () => {
       logger.info(`✅ Sauti Media BaaS MVP running on port ${PORT}`);
       logger.info(`📖 API Documentation: http://localhost:${PORT}/v1/docs`);
       logger.info(`❤️ Health Check: http://localhost:${PORT}/health`);
-      logger.info('');
-      logger.info('🌍 African Media Distribution Features:');
-      logger.info('   📤 Media Ingestion via Mux');
-      logger.info('   🎬 African ISP-optimized streaming');
-      logger.info('   💰 Ad insertion and monetization');
-      logger.info('   📱 Mobile-first delivery');
+      logger.info(
+        `🧪 Browser Harness: http://localhost:${PORT}/demo/sauti-test-harness.html`,
+      );
+      logger.info("");
+      logger.info("🌍 African Media Distribution Features:");
+      logger.info("   📤 Media Ingestion via Mux");
+      logger.info("   🎬 African ISP-optimized streaming");
+      logger.info("   💰 Ad insertion and monetization");
+      logger.info("   📱 Mobile-first delivery");
     });
-    
+
     // Graceful shutdown
-    process.on('SIGTERM', () => {
-      logger.info('SIGTERM received, shutting down gracefully');
+    process.on("SIGTERM", () => {
+      logger.info("SIGTERM received, shutting down gracefully");
       server.close(() => {
-        logger.info('Process terminated');
+        logger.info("Process terminated");
         process.exit(0);
       });
     });
-    
-    process.on('SIGINT', () => {
-      logger.info('SIGINT received, shutting down gracefully');
+
+    process.on("SIGINT", () => {
+      logger.info("SIGINT received, shutting down gracefully");
       server.close(() => {
-        logger.info('Process terminated');
+        logger.info("Process terminated");
         process.exit(0);
       });
     });
-    
   } catch (error) {
-    logger.error('Failed to start MVP server:', error);
+    logger.error("Failed to start MVP server:", error);
     process.exit(1);
   }
 }
