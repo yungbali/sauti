@@ -14,6 +14,7 @@ const helmet = require("helmet");
 const path = require("path");
 const rateLimit = require("express-rate-limit");
 const { logger } = require("./common/logger");
+const { assertMvpReadiness } = require("./config/mvp-readiness.config");
 
 // Core MVP services only
 const {
@@ -170,6 +171,14 @@ function createMvpApp() {
 async function startMvpServer() {
   try {
     logger.info("🚀 Starting Sauti Media BaaS MVP...");
+
+    const readiness = assertMvpReadiness();
+    if (readiness.status === "demo-ready") {
+      logger.warn(
+        "MVP is running in demo-ready mode. Configure production secrets before partner launch.",
+        readiness.summary,
+      );
+    }
 
     // Create storage directory
     const fs = require("fs");
