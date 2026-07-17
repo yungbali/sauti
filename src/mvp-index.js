@@ -24,6 +24,7 @@ const {
   setupMvpStreamingRoutes,
 } = require("./api-gateway/routes/mvp-streaming.routes");
 const { setupMvpAdRoutes } = require("./api-gateway/routes/mvp-ad.routes");
+const { setupMvpLiveRoutes } = require("./api-gateway/routes/mvp-live.routes");
 const {
   setupMvpHealthRoutes,
 } = require("./api-gateway/routes/mvp-health.routes");
@@ -86,6 +87,7 @@ function createMvpApp() {
   app.use(`${apiPrefix}/ingest`, setupMvpIngestRoutes());
   app.use(`${apiPrefix}/streaming`, setupMvpStreamingRoutes());
   app.use(`${apiPrefix}/ads`, setupMvpAdRoutes());
+  app.use(`${apiPrefix}/live`, setupMvpLiveRoutes());
 
   // Health and status
   app.use("/health", setupMvpHealthRoutes());
@@ -98,6 +100,7 @@ function createMvpApp() {
       description: "African-optimized media distribution backend",
       features: [
         "Media Ingestion via Mux",
+        "Live broadcasts via Mux",
         "African ISP-optimized streaming",
         "Ad insertion and monetization",
         "Mobile-first delivery",
@@ -105,8 +108,10 @@ function createMvpApp() {
       endpoints: {
         ingest: `${apiPrefix}/ingest`,
         streaming: `${apiPrefix}/streaming`,
+        live: `${apiPrefix}/live`,
         ads: `${apiPrefix}/ads`,
         demo: "/demo/sauti-test-harness.html",
+        liveViewer: "/demo/live.html?liveStreamId=LIVE_STREAM_ID",
         health: "/health",
       },
     });
@@ -126,8 +131,15 @@ function createMvpApp() {
           "Get HLS manifest with optional ads",
         "GET /v1/streaming/:assetId/qualities":
           "Get connection-aware quality options",
+        "POST /v1/live":
+          "Create a live broadcast and return secure producer ingest details",
+        "GET /v1/live/:liveStreamId":
+          "Get safe viewer playback details for a live broadcast",
+        "POST /v1/live/:liveStreamId/end": "End a live broadcast recording",
         "GET /demo/sauti-test-harness.html":
           "Open the browser playback test harness",
+        "GET /demo/live.html?liveStreamId=LIVE_STREAM_ID":
+          "Open the live broadcast viewer",
         "POST /v1/ads/cuepoints/:assetId": "Create ad cue points",
         "GET /v1/ads/cuepoints/:assetId": "Get ad cue points",
         "GET /v1/ads/:assetId/decision": "Get server-guided ad decision",
@@ -146,8 +158,10 @@ function createMvpApp() {
       availableEndpoints: [
         `${apiPrefix}/ingest`,
         `${apiPrefix}/streaming`,
+        `${apiPrefix}/live`,
         `${apiPrefix}/ads`,
         "/demo/sauti-test-harness.html",
+        "/demo/live.html?liveStreamId=LIVE_STREAM_ID",
         "/health",
       ],
     });
@@ -199,6 +213,7 @@ async function startMvpServer() {
       logger.info("");
       logger.info("🌍 African Media Distribution Features:");
       logger.info("   📤 Media Ingestion via Mux");
+      logger.info("   🔴 Live broadcasts via Mux");
       logger.info("   🎬 African ISP-optimized streaming");
       logger.info("   💰 Ad insertion and monetization");
       logger.info("   📱 Mobile-first delivery");

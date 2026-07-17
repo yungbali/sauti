@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sauti Live</title>
+    <style>
+      body {
+        margin: 0;
+        background: #0b1020;
+        color: #f8fafc;
+        font-family: system-ui, sans-serif;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 3rem 1.25rem;
+      }
+      .eyebrow {
+        color: #f97316;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      h1 {
+        margin: 0.4rem 0 0.8rem;
+        font-size: clamp(2rem, 6vw, 4rem);
+      }
+      p {
+        color: #cbd5e1;
+        line-height: 1.6;
+      }
+      video {
+        width: 100%;
+        background: #020617;
+        border-radius: 1rem;
+        margin-top: 1rem;
+      }
+      #status {
+        display: inline-block;
+        padding: 0.35rem 0.7rem;
+        border-radius: 999px;
+        background: #1e293b;
+      }
+      .error {
+        color: #fca5a5;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="eyebrow">Sauti Live</div>
+      <h1 id="title">Live broadcast</h1>
+      <p id="status">Loading broadcast…</p>
+      <video id="player" controls playsinline></video>
+      <p>
+        Live video is optimized and delivered by Mux. If the event has not
+        started, keep this page open and refresh once the producer goes live.
+      </p>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script>
+      const liveStreamId = new URLSearchParams(window.location.search).get(
+        "liveStreamId",
+      );
+      const status = document.getElementById("status");
+      const title = document.getElementById("title");
+      const player = document.getElementById("player");
+
+      async function loadBroadcast() {
+        if (!liveStreamId)
+          throw new Error("A liveStreamId is required in the page URL.");
+        const response = await fetch(
+          `/v1/live/${encodeURIComponent(liveStreamId)}`,
+        );
+        if (!response.ok)
+          throw new Error("This live broadcast could not be found.");
+        const broadcast = await response.json();
+        title.textContent = broadcast.title || "Live broadcast";
+        status.textContent =
+          broadcast.status === "active"
+            ? "● Live now"
+            : "Stream is not live yet";
+        if (!broadcast.playback?.hlsUrl) return;
+        if (window.Hls && Hls.isSupported()) {
+          const hls = new Hls();
+          hls.loadSource(broadcast.playback.hlsUrl);
+          hls.attachMedia(player);
+        } else {
+          player.src = broadcast.playback.hlsUrl;
+        }
+      }
+
+      loadBroadcast().catch((error) => {
+        status.textContent = error.message;
+        status.classList.add("error");
+      });
+    </script>
+  </body>
+</html>

@@ -7,6 +7,7 @@ A simplified, production-ready media backend specifically designed for African m
 ## ✨ Features
 
 - 📤 **Media Ingestion** - Upload & import via Mux
+- 🔴 **Live Broadcasts** - Create an RTMP broadcast, go live, and share an HLS playback URL
 - 🌍 **African ISP Optimization** - Kenya, Nigeria, South Africa, Ghana
 - 📱 **Mobile-First Streaming** - Optimized for cellular networks
 - 💰 **Ad Insertion** - Pre-roll, mid-roll, post-roll monetization
@@ -35,6 +36,12 @@ curl http://localhost:3000/
 curl -X POST http://localhost:3000/v1/ingest/upload \
   -H "Content-Type: application/json" \
   -d '{"corsOrigin": "https://example.com", "contentType": "video"}'
+
+# Create a live broadcast. Keep streamKey private: it is for OBS, not viewers.
+curl -X POST http://localhost:3000/v1/live \
+  -H "Content-Type: application/json" \
+  -H "x-live-admin-token: $LIVE_ADMIN_TOKEN" \
+  -d '{"title":"Friday news","latencyMode":"reduced"}'
 
 # Get Nigerian mobile/cellular optimized streaming metadata
 curl "http://localhost:3000/v1/streaming/test-asset?country=NG&isp=mtn&deviceType=mobile&connectionType=cellular"
@@ -106,6 +113,16 @@ curl -X POST http://localhost:3000/v1/ads/test-asset/events \
 - `GET /v1/streaming/:assetId/manifest` - Get HLS manifest with ads
 - `GET /v1/streaming/:assetId/qualities` - Get quality options
 
+### Live Streaming
+
+1. Call `POST /v1/live` from a producer-only control surface. The response includes an RTMP URL and a private `streamKey`.
+2. In OBS, choose **Custom** streaming server, set the server to the returned `ingest.url`, and set the stream key to the returned `ingest.streamKey`.
+3. Give viewers the `playback.hlsUrl` from `GET /v1/live/:liveStreamId`; this endpoint never exposes the stream key.
+4. Call `POST /v1/live/:liveStreamId/end` when the event is over.
+
+Live create and end requests require `x-live-admin-token` when `LIVE_ADMIN_TOKEN` is set, and always require it in production.
+For a ready-made viewer page, share `/demo/live.html?liveStreamId=LIVE_STREAM_ID`.
+
 ### Ad Monetization
 
 - `POST /v1/ads/cuepoints/:assetId` - Create ad cue points
@@ -154,6 +171,9 @@ STORAGE_PROVIDER=local
 # Add real Mux credentials
 MUX_TOKEN_ID=your-real-token
 MUX_TOKEN_SECRET=your-real-secret
+
+# Protect broadcast creation and completion
+LIVE_ADMIN_TOKEN=use-a-long-random-secret
 
 # Add real database
 MONGODB_URI=mongodb://your-database

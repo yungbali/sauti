@@ -8,34 +8,17 @@ const REQUIRED_PRODUCTION_VARIABLES = [
   {
     key: "MUX_TOKEN_ID",
     service: "mux",
-    description: "Mux token ID for direct uploads, imports, and asset status",
+    description: "Mux token ID for live broadcasts and video delivery",
   },
   {
     key: "MUX_TOKEN_SECRET",
     service: "mux",
-    description:
-      "Mux token secret for direct uploads, imports, and asset status",
+    description: "Mux token secret for live broadcasts and video delivery",
   },
   {
-    key: "MUX_WEBHOOK_SECRET",
-    service: "mux",
-    description:
-      "Mux webhook signing secret for trusted asset lifecycle updates",
-  },
-  {
-    key: "SUPABASE_URL",
-    service: "database",
-    description: "Supabase project URL for durable MVP persistence",
-  },
-  {
-    key: "SUPABASE_ANON_KEY",
-    service: "database",
-    description: "Supabase anon key for read/write operations guarded by RLS",
-  },
-  {
-    key: "JWT_SECRET",
+    key: "LIVE_ADMIN_TOKEN",
     service: "auth",
-    description: "JWT signing secret for partner/API authentication",
+    description: "Secret required to create or end live broadcasts",
   },
 ];
 
